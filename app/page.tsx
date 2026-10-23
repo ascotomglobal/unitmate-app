@@ -1,230 +1,281 @@
 'use client';
 
-import './globals.css';
-import { useState } from 'react';
+import React, { useState } from 'react';
 
-const mockFlats = [
-  { id: '325-1', block: 'Block 325', flat: 'Flat 1', resident: 'Mr. Adebayo', status: 'Reconciled', target: 14000, paid: 14000, va: '9928400101' },
-  { id: '325-2', block: 'Block 325', flat: 'Flat 2', resident: 'Resident', status: 'Pending', target: 14000, paid: 6000, va: '9928400102' },
-  { id: '326-1', block: 'Block 326', flat: 'Flat 1', resident: 'Resident', status: 'Reconciled', target: 14000, paid: 14000, va: '9928400201' },
-];
+const mockUnits: Record<string, { block: string; flat: string; resident: string; target: string; paid: string; balance: string; status: string; va: string }> = {
+  '325-1': { block: 'Block 325', flat: 'Flat 1', resident: 'Mr. Adebayo', target: '₦14,000', paid: '₦14,000', balance: '₦0', status: 'Reconciled', va: '9928400101' },
+  '325-2': { block: 'Block 325', flat: 'Flat 2', resident: 'Resident', target: '₦14,000', paid: '₦6,000', balance: '₦8,000', status: 'Part Payment', va: '9928400102' },
+  '326-1': { block: 'Block 326', flat: 'Flat 1', resident: 'Resident', target: '₦14,000', paid: '₦14,000', balance: '₦0', status: 'Reconciled', va: '9928400201' },
+};
 
-const mockOutflows = [
-  { id: 'SEC-04-2026', title: 'Security Guards Allowances (Day & Night)', cat: 'Security', date: '2026-04-05', amount: 90000 },
-  { id: 'SL-03-2026', title: 'Solar Streetlight Battery Replacement', cat: 'Maintenance', date: '2026-03-20', amount: 45000 },
-  { id: 'SAN-03-2026', title: 'Quarterly Drainage Evacuation', cat: 'Sanitation', date: '2026-03-10', amount: 35000 },
+const mockVouchers = [
+  { id: 'SEC-04-2026', title: 'Security Guards Monthly Allowances', date: '05 Apr 2026', amount: '₦90,000', cat: 'Security' },
+  { id: 'SL-03-2026', title: 'Solar Streetlight Battery Replacement', date: '20 Mar 2026', amount: '₦45,000', cat: 'Repairs' },
+  { id: 'SAN-03-2026', title: 'Drainage Evacuation & Sanitation', date: '10 Mar 2026', amount: '₦35,000', cat: 'Sanitation' },
 ];
 
 export default function Home() {
-  const [selectedFlatId, setSelectedFlatId] = useState('325-1');
+  const [selectedUnitKey, setSelectedUnitKey] = useState('');
+  const [activeUnit, setActiveUnit] = useState<any>(null);
   const [showLedger, setShowLedger] = useState(false);
-  const [excoUnlocked, setExcoUnlocked] = useState(false);
-  const [pin, setPin] = useState('');
-  const [showPinModal, setShowPinModal] = useState(false);
+  const [showExcoModal, setShowExcoModal] = useState(false);
+  const [excoPin, setExcoPin] = useState('');
+  const [isExcoAuthenticated, setIsExcoAuthenticated] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const selectedFlat = mockFlats.find(f => f.id === selectedFlatId) || mockFlats[0];
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(selectedFlat.va);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleLookup = () => {
+    if (selectedUnitKey && mockUnits[selectedUnitKey]) {
+      setActiveUnit(mockUnits[selectedUnitKey]);
+    } else {
+      alert('Please select your Block and Flat.');
+    }
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handleExcoLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === '2026') {
-      setExcoUnlocked(true);
-      setShowPinModal(false);
-      setPin('');
+    if (excoPin === '2026') {
+      setIsExcoAuthenticated(true);
+      setShowExcoModal(false);
+      setExcoPin('');
     } else {
-      alert('Invalid Exco PIN');
-      setPin('');
+      alert('Access Denied: Invalid Exco PIN');
+      setExcoPin('');
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
-      {/* Top Navbar with Interlocking UM Monogram */}
-      <header className="bg-slate-950/80 backdrop-blur border-b border-slate-800 sticky top-0 z-30">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            {/* Concept 1 Monogram Emblem */}
-            <div className="relative w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
-              <span className="text-emerald-400 font-black tracking-tighter text-xl">U</span>
-              <span className="text-white font-black tracking-tighter text-xl -ml-0.5">M</span>
-              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950 flex items-center justify-center">
-                <span className="text-slate-950 text-[8px] font-black">✓</span>
-              </div>
-            </div>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0B132B', color: '#E0E1DD', fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px 16px 60px; }
+        .card { background: #1C2541; border: 1px solid #2B3A67; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+        .nav-btn { background: #243054; border: 1px solid #3A4D7C; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-emerald { background: #10B981; border: none; color: #064E3B; font-weight: 700; padding: 12px 20px; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px; }
+        .btn-emerald:hover { background: #34D399; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .badge-amber { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.4); }
+        select, input { width: 100%; background: #0F172A; border: 1px solid #334155; color: #fff; padding: 12px 14px; border-radius: 10px; font-size: 14px; outline: none; margin-top: 8px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: #151D35; border: 1px solid #253359; border-radius: 12px; padding: 12px; text-align: center; }
+        .stat-title { font-size: 11px; color: #8D99AE; text-transform: uppercase; font-weight: 600; }
+        .stat-val { font-size: 14px; font-weight: 800; color: #fff; margin-top: 4px; }
+      `}</style>
+
+      {/* Header with Visual Monogram Logo */}
+      <header style={{ backgroundColor: '#090D1C', borderBottom: '1px solid #1C2541', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+            
+            {/* Visual Vector Monogram Icon (Concept 1) */}
+            <svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="100" height="100" rx="20" fill="#151D35" />
+              {/* Unit U Block */}
+              <path d="M 24 28 V 56 C 24 64 30 70 38 70 C 46 70 52 64 52 56 V 28 H 42 V 54 C 42 57 40 59 38 59 C 36 59 34 57 34 54 V 28 H 24 Z" fill="#10B981" />
+              {/* Mate M Block */}
+              <path d="M 50 36 L 63 54 L 76 36 H 86 V 68 H 76 V 49 L 63 67 L 50 49 V 68 H 40 V 36 H 50 Z" fill="#34D399" />
+              {/* Trust Checkmark Overlay */}
+              <path d="M 18 64 L 38 82 L 84 32" stroke="#10B981" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+
             <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="font-extrabold text-lg text-white tracking-tight">
-                  Unit<span className="text-emerald-400">Mate</span>
-                </h1>
-                <span className="text-[10px] bg-slate-800 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-900/60 font-medium">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>
+                  Unit<span style={{ color: '#10B981' }}>Mate</span>
+                </span>
+                <span style={{ fontSize: '10px', background: '#243054', color: '#6EE7B7', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
                   Ascotom Global
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">Action Unit • Zone B, Jakande Estate</p>
+              <p style={{ fontSize: '11px', color: '#8D99AE', marginTop: '2px' }}>Action Unit • Zone B, Jakande Estate</p>
             </div>
           </div>
 
-          <button
+          <button 
+            className="nav-btn" 
             onClick={() => {
-              if (excoUnlocked) setExcoUnlocked(false);
-              else setShowPinModal(true);
+              if (isExcoAuthenticated) setIsExcoAuthenticated(false);
+              else setShowExcoModal(true);
             }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-              excoUnlocked 
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400' 
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
-            }`}
           >
-            {excoUnlocked ? 'Exco Mode (Active)' : 'Exco Login'}
+            {isExcoAuthenticated ? 'Logout Exco' : 'Exco Login'}
           </button>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
-        {/* High-Level Estate Summary Cards */}
-        <section className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Target Period</p>
-            <p className="text-sm font-bold text-white mt-1">Oct 2025 – Apr 2026</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">7 Mos @ ₦2,000/mo</p>
+      <div className="container">
+        
+        {/* High-Level Overview Metrics */}
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-title">Target Period</div>
+            <div className="stat-val">Oct 25 – Apr 26</div>
+            <div style={{ fontSize: '10px', color: '#8D99AE', marginTop: '2px' }}>7 Mos @ ₦2k/mo</div>
           </div>
-          <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Verified Outflows</p>
-            <p className="text-sm font-bold text-rose-400 mt-1">₦170,000</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">3 audited vouchers</p>
+          <div className="stat-card">
+            <div className="stat-title">Disbursed</div>
+            <div className="stat-val" style={{ color: '#F87171' }}>₦170,000</div>
+            <div style={{ fontSize: '10px', color: '#8D99AE', marginTop: '2px' }}>3 Vouchers</div>
           </div>
-          <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Liquid Reserve</p>
-            <p className="text-sm font-bold text-emerald-400 mt-1">₦122,000</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">Treasury balance</p>
+          <div className="stat-card">
+            <div className="stat-title">Liquid Reserve</div>
+            <div className="stat-val" style={{ color: '#34D399' }}>₦122,000</div>
+            <div style={{ fontSize: '10px', color: '#8D99AE', marginTop: '2px' }}>Operational</div>
           </div>
-        </section>
+        </div>
 
-        {/* Resident Unit Portal (Privacy-Protected Dropdown) */}
-        <section className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
-            <div>
-              <h2 className="text-base font-bold text-white">Find Your Unit Ledger</h2>
-              <p className="text-xs text-slate-400">Select your flat to view dedicated transfer details</p>
-            </div>
-            <select
-              value={selectedFlatId}
-              onChange={(e) => setSelectedFlatId(e.target.value)}
-              className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-500"
-            >
-              <option value="325-1">Block 325, Flat 1 (Mr. Adebayo)</option>
-              <option value="325-2">Block 325, Flat 2</option>
-              <option value="326-1">Block 326, Flat 1</option>
-            </select>
+        {/* Resident Private Access Portal */}
+        <div className="card">
+          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>Resident Dues Access</h2>
+          <p style={{ fontSize: '12px', color: '#8D99AE', marginBottom: '16px' }}>Select your residence to view payment credentials and reconciliation status.</p>
+          
+          <label style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#8D99AE' }}>Select Your Residence</label>
+          <select 
+            value={selectedUnitKey} 
+            onChange={(e) => {
+              setSelectedUnitKey(e.target.value);
+              setActiveUnit(null);
+            }}
+          >
+            <option value="">-- Choose Flat --</option>
+            <option value="325-1">Block 325, Flat 1</option>
+            <option value="325-2">Block 325, Flat 2</option>
+            <option value="326-1">Block 326, Flat 1</option>
+          </select>
+
+          <div style={{ marginTop: '16px' }}>
+            <button className="btn-emerald" onClick={handleLookup}>
+              View Unit Statement
+            </button>
           </div>
 
-          <div className="mt-5 grid sm:grid-cols-2 gap-4">
-            <div className="bg-slate-900/90 border border-slate-800/80 p-4 rounded-xl">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Contribution Status</span>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xl font-black text-white">{selectedFlat.block}, {selectedFlat.flat}</span>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                  selectedFlat.status === 'Reconciled' 
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
-                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                }`}>
-                  {selectedFlat.status}
+          {/* Statement View (Visible Only After Selection) */}
+          {activeUnit && (
+            <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #2B3A67' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#fff' }}>{activeUnit.block}, {activeUnit.flat}</h3>
+                  <p style={{ fontSize: '12px', color: '#8D99AE' }}>Registered: {activeUnit.resident}</p>
+                </div>
+                <span className={`badge ${activeUnit.status === 'Reconciled' ? 'badge-green' : 'badge-amber'}`}>
+                  {activeUnit.status}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Target: <span className="text-slate-200">₦{selectedFlat.target.toLocaleString()}</span> • Paid: <span className="text-emerald-400 font-semibold">₦{selectedFlat.paid.toLocaleString()}</span>
-              </p>
-            </div>
 
-            <div className="bg-slate-900/90 border border-slate-800/80 p-4 rounded-xl">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Dedicated Virtual Account</span>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-lg font-mono font-bold text-white tracking-wider">{selectedFlat.va}</span>
-                <button
-                  onClick={handleCopy}
-                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded text-xs font-semibold border border-slate-700"
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+              <div style={{ background: '#0F172A', borderRadius: '12px', padding: '14px', marginBottom: '14px', border: '1px solid #1E293B' }}>
+                <div style={{ fontSize: '11px', color: '#8D99AE', textTransform: 'uppercase', fontWeight: 600 }}>Dedicated Inflow Account</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '1px', color: '#34D399', fontFamily: 'monospace' }}>
+                    {activeUnit.va}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(activeUnit.va);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    style={{ background: '#1E293B', border: '1px solid #334155', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '11px', color: '#8D99AE', marginTop: '6px' }}>
+                  Wema Bank (Monnify) • UnitMate - {activeUnit.block} {activeUnit.flat}
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 mt-2">
-                Bank: <span className="text-slate-200">Wema Bank (Monnify)</span> • Name: <span className="text-slate-200">UnitMate - {selectedFlat.block} {selectedFlat.flat}</span>
-              </p>
-            </div>
-          </div>
-        </section>
 
-        {/* Collapsible Transparency Ledger */}
-        <section className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-white">Action Unit Transparency Ledger</h2>
-              <p className="text-xs text-slate-400">Audited outflows and verified receipts</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                <div style={{ background: '#151D35', padding: '10px', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '10px', color: '#8D99AE' }}>Target</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{activeUnit.target}</div>
+                </div>
+                <div style={{ background: '#151D35', padding: '10px', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '10px', color: '#8D99AE' }}>Paid</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#34D399' }}>{activeUnit.paid}</div>
+                </div>
+                <div style={{ background: '#151D35', padding: '10px', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '10px', color: '#8D99AE' }}>Balance</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#F87171' }}>{activeUnit.balance}</div>
+                </div>
+              </div>
             </div>
-            <button
+          )}
+        </div>
+
+        {/* Collapsible Community Transparency Ledger */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Community Transparency Ledger</h2>
+              <p style={{ fontSize: '11px', color: '#8D99AE' }}>Audited outflows verified by Action Unit Exco</p>
+            </div>
+            <button 
+              className="nav-btn"
               onClick={() => setShowLedger(!showLedger)}
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800"
             >
-              {showLedger ? 'Collapse Ledger ▲' : 'View Ledger (3) ▼'}
+              {showLedger ? 'Hide' : 'Expand (3)'}
             </button>
           </div>
 
           {showLedger && (
-            <div className="mt-4 space-y-2.5 border-t border-slate-800/80 pt-4">
-              {mockOutflows.map((outflow) => (
-                <div key={outflow.id} className="bg-slate-900/60 border border-slate-800/70 p-3 rounded-xl flex items-center justify-between">
+            <div style={{ marginTop: '16px', borderTop: '1px solid #2B3A67', paddingTop: '12px' }}>
+              {mockVouchers.map((voucher) => (
+                <div key={voucher.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #253359' }}>
                   <div>
-                    <p className="text-xs font-semibold text-white">{outflow.title}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{outflow.cat} • {outflow.date} • Ref: {outflow.id}</p>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{voucher.title}</div>
+                    <div style={{ fontSize: '11px', color: '#8D99AE', marginTop: '2px' }}>{voucher.cat} • {voucher.date} • Ref: {voucher.id}</div>
                   </div>
-                  <span className="text-xs font-bold text-rose-400">-₦{outflow.amount.toLocaleString()}</span>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#F87171' }}>-{voucher.amount}</div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </div>
+
+        {/* Exco Management Controls (Protected) */}
+        {isExcoAuthenticated && (
+          <div className="card" style={{ border: '1px solid #10B981' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h2 style={{ fontSize: '15px', fontWeight: 800, color: '#10B981' }}>Exco Administrative Actions</h2>
+              <span className="badge badge-green">Authorized</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#8D99AE', marginBottom: '16px' }}>Zone B Executive Committee privileged functions.</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="nav-btn" style={{ flex: 1 }} onClick={() => alert('Opening Outflow Voucher Creator...')}>+ Post Expense Voucher</button>
+              <button className="nav-btn" style={{ flex: 1 }} onClick={() => alert('Reconciling Monnify Inflows...')}>Sync Bank Inflows</button>
+            </div>
+          </div>
+        )}
+
+        <footer style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginTop: '30px' }}>
+          UnitMate Platform • Managed by <strong>Ascotom Global Services</strong> for Action Unit, Zone B
+        </footer>
       </div>
 
       {/* Exco PIN Modal */}
-      {showPinModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-950 border border-slate-800 p-6 rounded-2xl max-w-xs w-full shadow-2xl">
-            <h3 className="text-sm font-bold text-white">Enter Exco Passcode</h3>
-            <p className="text-xs text-slate-400 mt-1">Authorized personnel only</p>
-            <form onSubmit={handlePinSubmit} className="mt-4 space-y-3">
-              <input
-                type="password"
-                maxLength={4}
-                value={pin}
-                placeholder="Enter 4-digit PIN (2026)"
-                onChange={(e) => setPin(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-center tracking-widest text-white outline-none focus:border-emerald-500"
+      {showExcoModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
+          <div style={{ background: '#1C2541', border: '1px solid #2B3A67', borderRadius: '16px', padding: '24px', maxWidth: '320px', width: '100%', textAlign: 'center' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Exco PIN Authentication</h3>
+            <p style={{ fontSize: '12px', color: '#8D99AE', margin: '6px 0 16px' }}>Authorized Action Unit Exco members only.</p>
+            <form onSubmit={handleExcoLogin}>
+              <input 
+                type="password" 
+                maxLength={4} 
+                autoFocus 
+                placeholder="Enter PIN (2026)" 
+                value={excoPin} 
+                onChange={(e) => setExcoPin(e.target.value)} 
+                style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '18px' }}
               />
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPinModal(false)}
-                  className="w-1/2 py-2 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white"
-                >
-                  Unlock
-                </button>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button type="button" className="nav-btn" style={{ flex: 1 }} onClick={() => setShowExcoModal(false)}>Cancel</button>
+                <button type="submit" className="btn-emerald" style={{ flex: 1, padding: '10px' }}>Authorize</button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
