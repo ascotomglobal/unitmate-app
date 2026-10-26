@@ -22,6 +22,7 @@ interface BaseUnit {
   ratePerMonth: number;
   contactName: string;
   phone: string;
+  passcode: string; // Private access PIN per flat
   paidMonths: string[];
   customAccount: string;
 }
@@ -38,13 +39,13 @@ const DEFAULT_BLOCKS = [325, 326, 327, 328, 329, 330, 331];
 const FLATS_PER_BLOCK = 6;
 
 const INITIAL_SHOPS = [
-  { id: 'SHP-1', name: 'Painter / Panel Beater', rate: 2000, account: '9928300001' },
-  { id: 'SHP-2', name: 'Welder Workshop', rate: 10000, account: '9928300002' },
-  { id: 'SHP-3', name: 'Drink Shop', rate: 1500, account: '9928300003' },
-  { id: 'SHP-4', name: 'Utility Shop', rate: 1500, account: '9928300004' },
-  { id: 'SHP-5', name: 'Logistics Shop', rate: 5000, account: '9928300005' },
-  { id: 'SHP-6', name: 'Dry Cleaner', rate: 2000, account: '9928300006' },
-  { id: 'SHP-7', name: 'Mechanics Yard', rate: 15000, account: '9928300007' }
+  { id: 'SHP-1', name: 'Painter / Panel Beater', rate: 2000, account: '9928300001', code: '1001' },
+  { id: 'SHP-2', name: 'Welder Workshop', rate: 10000, account: '9928300002', code: '1002' },
+  { id: 'SHP-3', name: 'Drink Shop', rate: 1500, account: '9928300003', code: '1003' },
+  { id: 'SHP-4', name: 'Utility Shop', rate: 1500, account: '9928300004', code: '1004' },
+  { id: 'SHP-5', name: 'Logistics Shop', rate: 5000, account: '9928300005', code: '1005' },
+  { id: 'SHP-6', name: 'Dry Cleaner', rate: 2000, account: '9928300006', code: '1006' },
+  { id: 'SHP-7', name: 'Mechanics Yard', rate: 15000, account: '9928300007', code: '1007' }
 ];
 
 export default function Home() {
@@ -52,12 +53,13 @@ export default function Home() {
   const [selectedBlock, setSelectedBlock] = useState('325');
   const [selectedFlat, setSelectedFlat] = useState('1');
   const [selectedShopId, setSelectedShopId] = useState('SHP-1');
+  const [residentEnteredPin, setResidentEnteredPin] = useState('');
   
   const [units, setUnits] = useState<Record<string, BaseUnit>>({});
   const [activeUnit, setActiveUnit] = useState<BaseUnit | null>(null);
   const [matrixYear, setMatrixYear] = useState<'2025' | '2026' | '2027'>('2025');
 
-  // Broadcast & Emergency Contacts State
+  // Emergency & Notices State
   const [notice, setNotice] = useState('⚠️ Main Security Gate closes strictly at 11:00 PM. Please ensure visitor registration.');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState('');
@@ -82,15 +84,16 @@ export default function Home() {
   // Exco Edit inputs
   const [editContact, setEditContact] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editPasscode, setEditPasscode] = useState('');
   const [newExpTitle, setNewExpTitle] = useState('');
   const [newExpAmount, setNewExpAmount] = useState('');
   const [newExpCat, setNewExpCat] = useState('Security');
 
   // Load state
   useEffect(() => {
-    const savedUnits = localStorage.getItem('unitmate_v5_units');
+    const savedUnits = localStorage.getItem('unitmate_v6_units');
     const savedNotice = localStorage.getItem('unitmate_notice');
-    const savedOutflows = localStorage.getItem('unitmate_v5_outflows');
+    const savedOutflows = localStorage.getItem('unitmate_v6_outflows');
     const savedSec = localStorage.getItem('unitmate_sec_phone');
     const savedCso = localStorage.getItem('unitmate_cso_phone');
 
@@ -114,6 +117,7 @@ export default function Home() {
             ratePerMonth: 2000,
             contactName: 'Occupant',
             phone: '',
+            passcode: `${b}${f}`, // e.g. 3251, 3252
             paidMonths: [],
             customAccount: `9928${b}${f}`
           };
@@ -128,29 +132,40 @@ export default function Home() {
           ratePerMonth: s.rate,
           contactName: 'Shop Operator',
           phone: '',
+          passcode: s.code,
           paidMonths: [],
           customAccount: s.account
         };
       });
 
       setUnits(initial);
-      localStorage.setItem('unitmate_v5_units', JSON.stringify(initial));
+      localStorage.setItem('unitmate_v6_units', JSON.stringify(initial));
     }
   }, []);
 
   const saveAllUnits = (updated: Record<string, BaseUnit>) => {
     setUnits(updated);
-    localStorage.setItem('unitmate_v5_units', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v6_units', JSON.stringify(updated));
   };
 
   const handleLookup = () => {
     const key = activeTab === 'residential' ? `FLAT-${selectedBlock}-${selectedFlat}` : selectedShopId;
     const unit = units[key];
-    if (unit) {
-      setActiveUnit(unit);
-      setEditContact(unit.contactName);
-      setEditPhone(unit.phone);
+
+    if (!unit) return;
+
+    // Check PIN: Exco bypasses PIN check; residents must enter correct PIN
+    if (!isExco) {
+      if (residentEnteredPin !== unit.passcode) {
+        alert(`Access Denied: Incorrect passcode for ${unit.name}. Contact Exco if forgotten.`);
+        return;
+      }
     }
+
+    setActiveUnit(unit);
+    setEditContact(unit.contactName);
+    setEditPhone(unit.phone);
+    setEditPasscode(unit.passcode);
   };
 
   const handleToggleMonth = (month: string) => {
@@ -173,12 +188,13 @@ export default function Home() {
     const updatedUnit: BaseUnit = {
       ...activeUnit,
       contactName: editContact.trim() || 'Occupant',
-      phone: editPhone.trim()
+      phone: editPhone.trim(),
+      passcode: editPasscode.trim() || activeUnit.passcode
     };
     const updatedRecord = { ...units, [activeUnit.id]: updatedUnit };
     saveAllUnits(updatedRecord);
     setActiveUnit(updatedUnit);
-    alert('Occupant record saved');
+    alert('Occupant record & Passcode updated successfully');
   };
 
   const handleSaveEmergencyContacts = (e: React.FormEvent) => {
@@ -188,7 +204,7 @@ export default function Home() {
     localStorage.setItem('unitmate_sec_phone', draftSecPhone.trim());
     localStorage.setItem('unitmate_cso_phone', draftCsoPhone.trim());
     setIsEditingContacts(false);
-    alert('Security contact numbers updated');
+    alert('Security contacts updated');
   };
 
   const handleAddExpense = (e: React.FormEvent) => {
@@ -205,7 +221,7 @@ export default function Home() {
     };
     const updated = [entry, ...outflows];
     setOutflows(updated);
-    localStorage.setItem('unitmate_v5_outflows', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v6_outflows', JSON.stringify(updated));
     setNewExpTitle('');
     setNewExpAmount('');
     alert('Expense recorded');
@@ -365,8 +381,25 @@ export default function Home() {
             </div>
           )}
 
+          {/* Passcode Input Field (Required for Residents) */}
+          {!isExco && (
+            <div style={{ marginTop: '10px' }}>
+              <label style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>
+                Enter Unit Passcode (e.g. 3251 for Blk 325 Flt 1)
+              </label>
+              <input 
+                type="password" 
+                maxLength={8}
+                placeholder="Enter your 4-digit code" 
+                value={residentEnteredPin} 
+                onChange={(e) => setResidentEnteredPin(e.target.value)} 
+                style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '16px' }}
+              />
+            </div>
+          )}
+
           <button className="btn-emerald" style={{ marginTop: '12px' }} onClick={handleLookup}>
-            Look Up Dues Record
+            {isExco ? 'Inspect Dues Record (Exco Bypass)' : 'Unlock Statement & Account'}
           </button>
 
           {/* Unit Statement View */}
@@ -514,7 +547,7 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Summary Stats */}
+              {/* Financial Totals */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center', marginTop: '14px' }}>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '9px', color: '#8D99AE' }}>Rate</div>
@@ -541,7 +574,7 @@ export default function Home() {
               {/* Exco Edit Form */}
               {isExco && (
                 <form onSubmit={handleSaveContactInfo} style={{ marginTop: '14px', background: '#111827', padding: '12px', borderRadius: '8px', border: '1px dashed #10B981' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>ADMIN: Edit Unit Occupant Info</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>ADMIN: Edit Unit & Passcode</span>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
                     <input 
                       type="text" 
@@ -556,8 +589,17 @@ export default function Home() {
                       onChange={(e) => setEditPhone(e.target.value)} 
                     />
                   </div>
+                  <div style={{ marginTop: '6px' }}>
+                    <label style={{ fontSize: '9px', color: '#8D99AE' }}>Unit Access Passcode</label>
+                    <input 
+                      type="text" 
+                      placeholder="Passcode" 
+                      value={editPasscode} 
+                      onChange={(e) => setEditPasscode(e.target.value)} 
+                    />
+                  </div>
                   <button type="submit" className="nav-btn" style={{ background: '#10B981', color: '#064E3B', fontWeight: 700, marginTop: '8px', width: '100%' }}>
-                    Save Info
+                    Save Unit Profile & Passcode
                   </button>
                 </form>
               )}
