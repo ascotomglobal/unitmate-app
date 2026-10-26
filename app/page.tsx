@@ -55,11 +55,18 @@ export default function Home() {
   
   const [units, setUnits] = useState<Record<string, BaseUnit>>({});
   const [activeUnit, setActiveUnit] = useState<BaseUnit | null>(null);
-  const [matrixYear, setMatrixYear] = useState<'2025' | '2026' | '2027'>('2026');
+  const [matrixYear, setMatrixYear] = useState<'2025' | '2026' | '2027'>('2025');
 
+  // Broadcast & Emergency Contacts State
   const [notice, setNotice] = useState('⚠️ Main Security Gate closes strictly at 11:00 PM. Please ensure visitor registration.');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState('');
+
+  const [secPhone, setSecPhone] = useState('08000000000');
+  const [csoPhone, setCsoPhone] = useState('08000000000');
+  const [isEditingContacts, setIsEditingContacts] = useState(false);
+  const [draftSecPhone, setDraftSecPhone] = useState('');
+  const [draftCsoPhone, setDraftCsoPhone] = useState('');
 
   const [outflows, setOutflows] = useState<OutflowRecord[]>([
     { id: 'SEC-OCT-25', title: 'Security Guard Allowances (Oct 2025)', category: 'Security', date: '2025-10-31', amount: 40000 },
@@ -79,13 +86,17 @@ export default function Home() {
   const [newExpAmount, setNewExpAmount] = useState('');
   const [newExpCat, setNewExpCat] = useState('Security');
 
-  // Load / Initialize state
+  // Load state
   useEffect(() => {
-    const savedUnits = localStorage.getItem('unitmate_v4_units');
+    const savedUnits = localStorage.getItem('unitmate_v5_units');
     const savedNotice = localStorage.getItem('unitmate_notice');
-    const savedOutflows = localStorage.getItem('unitmate_v4_outflows');
+    const savedOutflows = localStorage.getItem('unitmate_v5_outflows');
+    const savedSec = localStorage.getItem('unitmate_sec_phone');
+    const savedCso = localStorage.getItem('unitmate_cso_phone');
 
     if (savedNotice) setNotice(savedNotice);
+    if (savedSec) setSecPhone(savedSec);
+    if (savedCso) setCsoPhone(savedCso);
     if (savedOutflows) setOutflows(JSON.parse(savedOutflows));
 
     if (savedUnits) {
@@ -93,7 +104,6 @@ export default function Home() {
     } else {
       const initial: Record<string, BaseUnit> = {};
 
-      // Initialize 42 Flats
       DEFAULT_BLOCKS.forEach(b => {
         for (let f = 1; f <= FLATS_PER_BLOCK; f++) {
           const key = `FLAT-${b}-${f}`;
@@ -102,15 +112,14 @@ export default function Home() {
             name: `Block ${b}, Flat ${f}`,
             category: 'residential',
             ratePerMonth: 2000,
-            contactName: (b === 325 && f === 1) ? 'Mr. Adebayo' : 'Occupant',
+            contactName: 'Occupant',
             phone: '',
-            paidMonths: (b === 325 && f === 1) ? ['Oct 2025', 'Nov 2025', 'Dec 2025', 'Jan 2026', 'Feb 2026'] : [],
+            paidMonths: [],
             customAccount: `9928${b}${f}`
           };
         }
       });
 
-      // Initialize 7 Commercial Shops
       INITIAL_SHOPS.forEach(s => {
         initial[s.id] = {
           id: s.id,
@@ -125,13 +134,13 @@ export default function Home() {
       });
 
       setUnits(initial);
-      localStorage.setItem('unitmate_v4_units', JSON.stringify(initial));
+      localStorage.setItem('unitmate_v5_units', JSON.stringify(initial));
     }
   }, []);
 
   const saveAllUnits = (updated: Record<string, BaseUnit>) => {
     setUnits(updated);
-    localStorage.setItem('unitmate_v4_units', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v5_units', JSON.stringify(updated));
   };
 
   const handleLookup = () => {
@@ -169,7 +178,17 @@ export default function Home() {
     const updatedRecord = { ...units, [activeUnit.id]: updatedUnit };
     saveAllUnits(updatedRecord);
     setActiveUnit(updatedUnit);
-    alert('Details saved successfully');
+    alert('Occupant record saved');
+  };
+
+  const handleSaveEmergencyContacts = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSecPhone(draftSecPhone.trim());
+    setCsoPhone(draftCsoPhone.trim());
+    localStorage.setItem('unitmate_sec_phone', draftSecPhone.trim());
+    localStorage.setItem('unitmate_cso_phone', draftCsoPhone.trim());
+    setIsEditingContacts(false);
+    alert('Security contact numbers updated');
   };
 
   const handleAddExpense = (e: React.FormEvent) => {
@@ -186,13 +205,13 @@ export default function Home() {
     };
     const updated = [entry, ...outflows];
     setOutflows(updated);
-    localStorage.setItem('unitmate_v4_outflows', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v5_outflows', JSON.stringify(updated));
     setNewExpTitle('');
     setNewExpAmount('');
     alert('Expense recorded');
   };
 
-  // Financial aggregates
+  // Financial Balances
   const totalInflows = Object.values(units).reduce((acc, u) => acc + (u.paidMonths.length * u.ratePerMonth), 0);
   const totalOutflows = outflows.reduce((acc, o) => acc + o.amount, 0);
   const liquidReserve = totalInflows - totalOutflows;
@@ -229,10 +248,10 @@ export default function Home() {
         .btn-emerald { background: #10B981; border: none; color: #064E3B; font-weight: 700; padding: 10px 16px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 13px; }
         .tab-btn { flex: 1; padding: 8px; text-align: center; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; border: none; }
         select, input { width: 100%; background: #0F172A; border: 1px solid #334155; color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; margin-top: 4px; }
-        .month-pill { padding: 6px 4px; border-radius: 6px; font-size: 10px; font-weight: 700; text-align: center; user-select: none; }
-        .month-paid { background: rgba(16, 185, 129, 0.2); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.5); }
+        .month-pill { padding: 8px 4px; border-radius: 6px; font-size: 11px; font-weight: 700; text-align: center; user-select: none; transition: 0.15s; }
+        .month-paid { background: rgba(16, 185, 129, 0.25); color: #34D399; border: 1px solid #10B981; }
         .month-due { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-        .month-advance { background: rgba(56, 189, 248, 0.2); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.5); }
+        .month-advance { background: rgba(56, 189, 248, 0.25); color: #38BDF8; border: 1px solid #38BDF8; }
       `}</style>
 
       {/* Header */}
@@ -250,7 +269,7 @@ export default function Home() {
                 <span style={{ fontSize: '15px', fontWeight: '800', color: '#fff' }}>Unit<span style={{ color: '#10B981' }}>Mate</span></span>
                 <span style={{ fontSize: '9px', background: '#243054', color: '#6EE7B7', padding: '2px 6px', borderRadius: '4px' }}>Ascotom</span>
               </div>
-              <p style={{ fontSize: '10px', color: '#8D99AE' }}>Action Unit • Zone B, Jakande</p>
+              <p style={{ fontSize: '10px', color: '#8D99AE' }}>Action Unit (Blk 325-331) • Zone B</p>
             </div>
           </div>
           <button className="nav-btn" onClick={() => isExco ? setIsExco(false) : setShowPinModal(true)}>
@@ -382,7 +401,7 @@ export default function Home() {
                       background: 'rgba(56,189,248,0.2)',
                       color: '#38BDF8'
                     }}>
-                      🌟 Prepaid into 2027: {advance2027Paid.length} Mo
+                      🌟 2027 Advance: {advance2027Paid.length} Mo
                     </span>
                   )}
                 </div>
@@ -417,24 +436,24 @@ export default function Home() {
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button 
                       onClick={() => setMatrixYear('2025')}
-                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, background: matrixYear === '2025' ? '#FBBF24' : '#151D35', color: matrixYear === '2025' ? '#090D1C' : '#8D99AE', border: 'none', cursor: 'pointer' }}
+                      style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: matrixYear === '2025' ? '#FBBF24' : '#151D35', color: matrixYear === '2025' ? '#090D1C' : '#8D99AE', border: 'none', cursor: 'pointer' }}
                     >
                       2025 Arrears
                     </button>
                     <button 
                       onClick={() => setMatrixYear('2026')}
-                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, background: matrixYear === '2026' ? '#10B981' : '#151D35', color: matrixYear === '2026' ? '#064E3B' : '#8D99AE', border: 'none', cursor: 'pointer' }}
+                      style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: matrixYear === '2026' ? '#10B981' : '#151D35', color: matrixYear === '2026' ? '#064E3B' : '#8D99AE', border: 'none', cursor: 'pointer' }}
                     >
                       2026 Current
                     </button>
                     <button 
                       onClick={() => setMatrixYear('2027')}
-                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, background: matrixYear === '2027' ? '#38BDF8' : '#151D35', color: matrixYear === '2027' ? '#0B132B' : '#8D99AE', border: 'none', cursor: 'pointer' }}
+                      style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: matrixYear === '2027' ? '#38BDF8' : '#151D35', color: matrixYear === '2027' ? '#0B132B' : '#8D99AE', border: 'none', cursor: 'pointer' }}
                     >
                       2027 Advance {advance2027Paid.length > 0 && `(${advance2027Paid.length})`}
                     </button>
                   </div>
-                  {isExco && <span style={{ fontSize: '9px', color: '#10B981' }}>Tap to toggle</span>}
+                  {isExco && <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>Tap box to toggle</span>}
                 </div>
 
                 {/* 2025 View */}
@@ -487,7 +506,7 @@ export default function Home() {
                           className={`month-pill ${isPaid ? 'month-advance' : 'month-due'}`}
                           style={{ cursor: isExco ? 'pointer' : 'default' }}
                         >
-                          {month.split(' ')[0]} {isPaid ? '★ Advance' : 'Pending'}
+                          {month.split(' ')[0]} {isPaid ? '★ Paid' : 'Pending'}
                         </div>
                       );
                     })}
@@ -495,7 +514,7 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Financial Totals */}
+              {/* Summary Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center', marginTop: '14px' }}>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '9px', color: '#8D99AE' }}>Rate</div>
@@ -546,21 +565,59 @@ export default function Home() {
           )}
         </div>
 
-        {/* Emergency Speed-Dial Desk */}
+        {/* Emergency Speed-Dial Desk (Action Unit Security) */}
         <div className="card">
-          <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Action Unit Emergency Desk</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Action Unit Emergency Desk</h3>
+            {isExco && (
+              <button 
+                onClick={() => {
+                  setDraftSecPhone(secPhone);
+                  setDraftCsoPhone(csoPhone);
+                  setIsEditingContacts(true);
+                }}
+                style={{ background: '#243054', border: '1px solid #3A4D7C', color: '#6EE7B7', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}
+              >
+                Edit Numbers
+              </button>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <a href="tel:08000000000" style={{ textDecoration: 'none' }}>
-              <div style={{ background: '#151D35', border: '1px solid #2B3A67', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#38BDF8' }}>📞 Day/Night Security</span>
+            <a href={`tel:${secPhone}`} style={{ textDecoration: 'none' }}>
+              <div style={{ background: '#151D35', border: '1px solid #2B3A67', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#38BDF8' }}>📞 Action Unit Security</div>
+                <div style={{ fontSize: '10px', color: '#8D99AE', marginTop: '2px' }}>{secPhone}</div>
               </div>
             </a>
-            <a href="tel:08000000000" style={{ textDecoration: 'none' }}>
-              <div style={{ background: '#151D35', border: '1px solid #2B3A67', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#38BDF8' }}>📞 Zone B CSO</span>
+            <a href={`tel:${csoPhone}`} style={{ textDecoration: 'none' }}>
+              <div style={{ background: '#151D35', border: '1px solid #2B3A67', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#38BDF8' }}>📞 Zone B CSO</div>
+                <div style={{ fontSize: '10px', color: '#8D99AE', marginTop: '2px' }}>{csoPhone}</div>
               </div>
             </a>
           </div>
+
+          {/* Edit Contact Numbers Modal (Exco Only) */}
+          {isEditingContacts && (
+            <form onSubmit={handleSaveEmergencyContacts} style={{ marginTop: '12px', background: '#0F172A', padding: '10px', borderRadius: '8px', border: '1px solid #334155' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#10B981', marginBottom: '6px' }}>Update Emergency Phone Numbers</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', color: '#8D99AE' }}>Action Unit Security</label>
+                  <input type="tel" value={draftSecPhone} onChange={(e) => setDraftSecPhone(e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', color: '#8D99AE' }}>Zone B CSO</label>
+                  <input type="tel" value={draftCsoPhone} onChange={(e) => setDraftCsoPhone(e.target.value)} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button type="button" className="nav-btn" onClick={() => setIsEditingContacts(false)} style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="btn-emerald" style={{ flex: 1, padding: '6px' }}>Save Numbers</button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* EXCO ONLY: Financial Oversight & Outflows */}
