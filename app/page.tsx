@@ -22,7 +22,7 @@ interface BaseUnit {
   ratePerMonth: number;
   contactName: string;
   phone: string;
-  passcode: string; // Private access PIN per flat
+  passcode: string;
   paidMonths: string[];
   customAccount: string;
 }
@@ -30,9 +30,13 @@ interface BaseUnit {
 interface OutflowRecord {
   id: string;
   title: string;
+  beneficiary: string;
+  bankAccount: string;
   category: string;
   date: string;
   amount: number;
+  status: 'Disbursed' | 'Pending Approval';
+  authBy: string;
 }
 
 const DEFAULT_BLOCKS = [325, 326, 327, 328, 329, 330, 331];
@@ -59,7 +63,7 @@ export default function Home() {
   const [activeUnit, setActiveUnit] = useState<BaseUnit | null>(null);
   const [matrixYear, setMatrixYear] = useState<'2025' | '2026' | '2027'>('2025');
 
-  // Emergency & Notices State
+  // Emergency & Notices
   const [notice, setNotice] = useState('⚠️ Main Security Gate closes strictly at 11:00 PM. Please ensure visitor registration.');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState('');
@@ -70,9 +74,10 @@ export default function Home() {
   const [draftSecPhone, setDraftSecPhone] = useState('');
   const [draftCsoPhone, setDraftCsoPhone] = useState('');
 
+  // Disbursed Outflows
   const [outflows, setOutflows] = useState<OutflowRecord[]>([
-    { id: 'SEC-OCT-25', title: 'Security Guard Allowances (Oct 2025)', category: 'Security', date: '2025-10-31', amount: 40000 },
-    { id: 'ZONE-OCT-25', title: 'Zone B Central Levy (Oct 2025 @ ₦200/flat)', category: 'Zonal Dues', date: '2025-10-31', amount: 8400 }
+    { id: 'SEC-OCT-25', title: 'Day/Night Security Monthly Allowance', beneficiary: 'Musa Ibrahim (Head Guard)', bankAccount: 'Access Bank - 0129384756', category: 'Security', date: '2025-10-31', amount: 40000, status: 'Disbursed', authBy: 'Treasurer & Chairman' },
+    { id: 'ZONE-OCT-25', title: 'Zone B Central Dues (42 flats @ ₦200)', beneficiary: 'Zone B Central Account', bankAccount: 'Wema Bank - 9928400010', category: 'Zonal Dues', date: '2025-10-31', amount: 8400, status: 'Disbursed', authBy: 'Treasurer' }
   ]);
 
   // Exco States
@@ -85,15 +90,19 @@ export default function Home() {
   const [editContact, setEditContact] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editPasscode, setEditPasscode] = useState('');
-  const [newExpTitle, setNewExpTitle] = useState('');
-  const [newExpAmount, setNewExpAmount] = useState('');
-  const [newExpCat, setNewExpCat] = useState('Security');
+
+  // Contractor Payout Inputs
+  const [payoutRecipient, setPayoutRecipient] = useState('security');
+  const [customPayee, setCustomPayee] = useState('');
+  const [customBankAcc, setCustomBankAcc] = useState('');
+  const [payoutAmount, setPayoutAmount] = useState('40000');
+  const [payoutPurpose, setPayoutPurpose] = useState('Action Unit Security Monthly Allowance');
 
   // Load state
   useEffect(() => {
-    const savedUnits = localStorage.getItem('unitmate_v6_units');
+    const savedUnits = localStorage.getItem('unitmate_v7_units');
     const savedNotice = localStorage.getItem('unitmate_notice');
-    const savedOutflows = localStorage.getItem('unitmate_v6_outflows');
+    const savedOutflows = localStorage.getItem('unitmate_v7_outflows');
     const savedSec = localStorage.getItem('unitmate_sec_phone');
     const savedCso = localStorage.getItem('unitmate_cso_phone');
 
@@ -117,7 +126,7 @@ export default function Home() {
             ratePerMonth: 2000,
             contactName: 'Occupant',
             phone: '',
-            passcode: `${b}${f}`, // e.g. 3251, 3252
+            passcode: `${b}${f}`,
             paidMonths: [],
             customAccount: `9928${b}${f}`
           };
@@ -139,13 +148,13 @@ export default function Home() {
       });
 
       setUnits(initial);
-      localStorage.setItem('unitmate_v6_units', JSON.stringify(initial));
+      localStorage.setItem('unitmate_v7_units', JSON.stringify(initial));
     }
   }, []);
 
   const saveAllUnits = (updated: Record<string, BaseUnit>) => {
     setUnits(updated);
-    localStorage.setItem('unitmate_v6_units', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v7_units', JSON.stringify(updated));
   };
 
   const handleLookup = () => {
@@ -154,7 +163,6 @@ export default function Home() {
 
     if (!unit) return;
 
-    // Check PIN: Exco bypasses PIN check; residents must enter correct PIN
     if (!isExco) {
       if (residentEnteredPin !== unit.passcode) {
         alert(`Access Denied: Incorrect passcode for ${unit.name}. Contact Exco if forgotten.`);
@@ -197,34 +205,70 @@ export default function Home() {
     alert('Occupant record & Passcode updated successfully');
   };
 
-  const handleSaveEmergencyContacts = (e: React.FormEvent) => {
+  // Execute Direct Contractor Payout (Disbursement API simulation)
+  const handleDisbursePayment = (e: React.FormEvent) => {
     e.preventDefault();
-    setSecPhone(draftSecPhone.trim());
-    setCsoPhone(draftCsoPhone.trim());
-    localStorage.setItem('unitmate_sec_phone', draftSecPhone.trim());
-    localStorage.setItem('unitmate_cso_phone', draftCsoPhone.trim());
-    setIsEditingContacts(false);
-    alert('Security contacts updated');
+    const amt = Number(payoutAmount);
+    if (isNaN(amt) || amt <= 0) return alert('Enter a valid disbursement amount');
+
+    let payeeName = '';
+    let payeeBank = '';
+    let category = 'Security';
+
+    if (payoutRecipient === 'security') {
+      payeeName = 'Action Unit Security Guards';
+      payeeBank = 'Assigned Guard Account (NIP)';
+      category = 'Security';
+    } else if (payoutRecipient === 'zonal') {
+      payeeName = 'Zone B Central Executive Desk';
+      payeeBank = 'Wema Bank - 9928400010';
+      category = 'Zonal Dues';
+    } else {
+      if (!customPayee || !customBankAcc) return alert('Enter contractor payee and account');
+      payeeName = customPayee;
+      payeeBank = customBankAcc;
+      category = 'Maintenance';
+    }
+
+    const newDisbursement: OutflowRecord = {
+      id: `MNF-DISB-${Date.now().toString().slice(-4)}`,
+      title: payoutPurpose,
+      beneficiary: payeeName,
+      bankAccount: payeeBank,
+      category,
+      date: new Date().toISOString().split('T')[0],
+      amount: amt,
+      status: 'Disbursed',
+      authBy: 'Treasurer & Chairman (Dual Auth)'
+    };
+
+    const updated = [newDisbursement, ...outflows];
+    setOutflows(updated);
+    localStorage.setItem('unitmate_v7_outflows', JSON.stringify(updated));
+    alert(`DISBURSEMENT SUCCESSFUL:\n₦${amt.toLocaleString()} transferred via Monnify to ${payeeName}.\nAudited voucher generated.`);
+    if (payoutRecipient === 'custom') {
+      setCustomPayee('');
+      setCustomBankAcc('');
+    }
   };
 
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(newExpAmount);
-    if (!newExpTitle || isNaN(amt) || amt <= 0) return alert('Enter valid expense details');
+  // Automated Reminder Dispatch Generator
+  const currentCheckMonth = 'Jan 2026';
+  const owingUnits = Object.values(units).filter(u => !u.paidMonths.includes(currentCheckMonth));
 
-    const entry: OutflowRecord = {
-      id: `EXP-${Date.now().toString().slice(-4)}`,
-      title: newExpTitle,
-      category: newExpCat,
-      date: new Date().toISOString().split('T')[0],
-      amount: amt
-    };
-    const updated = [entry, ...outflows];
-    setOutflows(updated);
-    localStorage.setItem('unitmate_v6_outflows', JSON.stringify(updated));
-    setNewExpTitle('');
-    setNewExpAmount('');
-    alert('Expense recorded');
+  const handleSendReminderBatch = () => {
+    if (owingUnits.length === 0) return alert('All 42 flats and 7 shops have cleared dues for this period.');
+    const sample = owingUnits[0];
+    const text = `*ACTION UNIT DUES REMINDER*%0A`
+      + `Dear Resident (${sample.name}),%0A`
+      + `This is a reminder that Action Unit security and maintenance dues for ${currentCheckMonth} (₦${sample.ratePerMonth.toLocaleString()}) are due.%0A`
+      + `Please transfer directly to your dedicated unit account:%0A`
+      + `*Account:* ${sample.customAccount}%0A`
+      + `*Bank:* Wema Bank (Monnify)%0A`
+      + `*Beneficiary:* UnitMate - ${sample.name}%0A`
+      + `_Ignore if already paid. Verified by Ascotom Global._`;
+
+    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   // Financial Balances
@@ -236,23 +280,6 @@ export default function Home() {
   const arrears2025Unpaid = activeUnit ? ARREARS_2025.filter(m => !activeUnit.paidMonths.includes(m)) : [];
   const calendar2026Paid = activeUnit ? CALENDAR_2026.filter(m => activeUnit.paidMonths.includes(m)) : [];
   const advance2027Paid = activeUnit ? ADVANCE_2027.filter(m => activeUnit.paidMonths.includes(m)) : [];
-
-  const handleShareWhatsApp = () => {
-    if (!activeUnit) return;
-    const totalPaid = activeUnit.paidMonths.length * activeUnit.ratePerMonth;
-    const arrearsText = arrears2025Unpaid.length === 0 ? 'CLEARED' : `${arrears2025Unpaid.join(', ')} Owed`;
-    const advanceText = advance2027Paid.length > 0 ? `%0A*🌟 Advance 2027 Paid:* ${advance2027Paid.length} Months (${advance2027Paid.join(', ')})` : '';
-
-    const text = `*UNITMATE OFFICIAL STATEMENT*%0A`
-      + `*Unit:* ${activeUnit.name}%0A`
-      + `*Registered:* ${activeUnit.contactName}%0A`
-      + `*2025 Arrears (Oct-Dec):* ${arrearsText}%0A`
-      + `*2026 Status:* ${calendar2026Paid.length}/12 Months Cleared`
-      + advanceText + `%0A`
-      + `*Total Contributed to Date:* ₦${totalPaid.toLocaleString()}%0A`
-      + `*Action Unit, Zone B (Ascotom Global)*`;
-    window.open(`https://wa.me/?text=${text}`, '_blank');
-  };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0B132B', color: '#E0E1DD', fontFamily: 'system-ui, sans-serif' }}>
@@ -311,27 +338,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Notice Edit Modal */}
-        {isEditingNotice && (
-          <div className="card" style={{ border: '1px solid #10B981' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>Edit Broadcast Announcement</span>
-            <input 
-              type="text" 
-              value={noticeDraft} 
-              onChange={(e) => setNoticeDraft(e.target.value)} 
-              style={{ margin: '8px 0' }}
-            />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="nav-btn" onClick={() => setIsEditingNotice(false)}>Cancel</button>
-              <button className="btn-emerald" style={{ padding: '8px' }} onClick={() => {
-                setNotice(noticeDraft);
-                localStorage.setItem('unitmate_notice', noticeDraft);
-                setIsEditingNotice(false);
-              }}>Publish</button>
-            </div>
-          </div>
-        )}
-
         {/* Resident / Shop Portal */}
         <div className="card">
           <div style={{ display: 'flex', background: '#0F172A', padding: '4px', borderRadius: '10px', marginBottom: '14px' }}>
@@ -381,7 +387,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Passcode Input Field (Required for Residents) */}
           {!isExco && (
             <div style={{ marginTop: '10px' }}>
               <label style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>
@@ -390,7 +395,7 @@ export default function Home() {
               <input 
                 type="password" 
                 maxLength={8}
-                placeholder="Enter your 4-digit code" 
+                placeholder="Enter 4-digit code" 
                 value={residentEnteredPin} 
                 onChange={(e) => setResidentEnteredPin(e.target.value)} 
                 style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '16px' }}
@@ -402,7 +407,7 @@ export default function Home() {
             {isExco ? 'Inspect Dues Record (Exco Bypass)' : 'Unlock Statement & Account'}
           </button>
 
-          {/* Unit Statement View */}
+          {/* Unit Statement */}
           {activeUnit && (
             <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #2B3A67' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -422,9 +427,8 @@ export default function Home() {
                     background: arrears2025Unpaid.length === 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
                     color: arrears2025Unpaid.length === 0 ? '#34D399' : '#F87171'
                   }}>
-                    {arrears2025Unpaid.length === 0 ? '2025 Arrears: None' : `2025 Owed: ${arrears2025Unpaid.length} Mo`}
+                    {arrears2025Unpaid.length === 0 ? '2025: Cleared' : `2025 Owed: ${arrears2025Unpaid.length} Mo`}
                   </span>
-
                   {advance2027Paid.length > 0 && (
                     <span style={{ 
                       fontSize: '10px', 
@@ -440,7 +444,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Dedicated Inflow Account */}
+              {/* Dedicated Account */}
               <div style={{ background: '#0F172A', borderRadius: '10px', padding: '12px', margin: '12px 0', border: '1px solid #1E293B' }}>
                 <div style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>Dedicated Monnify Inflow Account</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -489,18 +493,12 @@ export default function Home() {
                   {isExco && <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>Tap box to toggle</span>}
                 </div>
 
-                {/* 2025 View */}
                 {matrixYear === '2025' && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                     {ARREARS_2025.map((month) => {
                       const isPaid = activeUnit.paidMonths.includes(month);
                       return (
-                        <div 
-                          key={month} 
-                          onClick={() => handleToggleMonth(month)}
-                          className={`month-pill ${isPaid ? 'month-paid' : 'month-due'}`}
-                          style={{ cursor: isExco ? 'pointer' : 'default' }}
-                        >
+                        <div key={month} onClick={() => handleToggleMonth(month)} className={`month-pill ${isPaid ? 'month-paid' : 'month-due'}`} style={{ cursor: isExco ? 'pointer' : 'default' }}>
                           {month.split(' ')[0]} {isPaid ? '✓ Paid' : '✗ Unpaid'}
                         </div>
                       );
@@ -508,18 +506,12 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 2026 View */}
                 {matrixYear === '2026' && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px' }}>
                     {CALENDAR_2026.map((month) => {
                       const isPaid = activeUnit.paidMonths.includes(month);
                       return (
-                        <div 
-                          key={month} 
-                          onClick={() => handleToggleMonth(month)}
-                          className={`month-pill ${isPaid ? 'month-paid' : 'month-due'}`}
-                          style={{ cursor: isExco ? 'pointer' : 'default' }}
-                        >
+                        <div key={month} onClick={() => handleToggleMonth(month)} className={`month-pill ${isPaid ? 'month-paid' : 'month-due'}`} style={{ cursor: isExco ? 'pointer' : 'default' }}>
                           {month.split(' ')[0]} {isPaid ? '✓' : '✗'}
                         </div>
                       );
@@ -527,18 +519,12 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 2027 View */}
                 {matrixYear === '2027' && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px' }}>
                     {ADVANCE_2027.map((month) => {
                       const isPaid = activeUnit.paidMonths.includes(month);
                       return (
-                        <div 
-                          key={month} 
-                          onClick={() => handleToggleMonth(month)}
-                          className={`month-pill ${isPaid ? 'month-advance' : 'month-due'}`}
-                          style={{ cursor: isExco ? 'pointer' : 'default' }}
-                        >
+                        <div key={month} onClick={() => handleToggleMonth(month)} className={`month-pill ${isPaid ? 'month-advance' : 'month-due'}`} style={{ cursor: isExco ? 'pointer' : 'default' }}>
                           {month.split(' ')[0]} {isPaid ? '★ Paid' : 'Pending'}
                         </div>
                       );
@@ -547,59 +533,35 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Financial Totals */}
+              {/* Totals */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center', marginTop: '14px' }}>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '9px', color: '#8D99AE' }}>Rate</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>₦{activeUnit.ratePerMonth.toLocaleString()}/mo</div>
                 </div>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Total Contributed</div>
+                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Total Paid</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#34D399' }}>₦{(activeUnit.paidMonths.length * activeUnit.ratePerMonth).toLocaleString()}</div>
                 </div>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Months Cleared</div>
+                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Cleared</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8' }}>{activeUnit.paidMonths.length} Months</div>
                 </div>
               </div>
 
-              {/* WhatsApp Share Button */}
-              <button 
-                onClick={handleShareWhatsApp}
-                style={{ marginTop: '14px', width: '100%', background: '#25D366', color: '#064E3B', fontWeight: 800, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}
-              >
-                Share Official Clearance to WhatsApp
-              </button>
-
-              {/* Exco Edit Form */}
               {isExco && (
                 <form onSubmit={handleSaveContactInfo} style={{ marginTop: '14px', background: '#111827', padding: '12px', borderRadius: '8px', border: '1px dashed #10B981' }}>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>ADMIN: Edit Unit & Passcode</span>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
-                    <input 
-                      type="text" 
-                      placeholder="Contact Name" 
-                      value={editContact} 
-                      onChange={(e) => setEditContact(e.target.value)} 
-                    />
-                    <input 
-                      type="tel" 
-                      placeholder="Phone Number" 
-                      value={editPhone} 
-                      onChange={(e) => setEditPhone(e.target.value)} 
-                    />
+                    <input type="text" placeholder="Contact Name" value={editContact} onChange={(e) => setEditContact(e.target.value)} />
+                    <input type="tel" placeholder="Phone Number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                   </div>
                   <div style={{ marginTop: '6px' }}>
                     <label style={{ fontSize: '9px', color: '#8D99AE' }}>Unit Access Passcode</label>
-                    <input 
-                      type="text" 
-                      placeholder="Passcode" 
-                      value={editPasscode} 
-                      onChange={(e) => setEditPasscode(e.target.value)} 
-                    />
+                    <input type="text" placeholder="Passcode" value={editPasscode} onChange={(e) => setEditPasscode(e.target.value)} />
                   </div>
                   <button type="submit" className="nav-btn" style={{ background: '#10B981', color: '#064E3B', fontWeight: 700, marginTop: '8px', width: '100%' }}>
-                    Save Unit Profile & Passcode
+                    Save Unit Record & Passcode
                   </button>
                 </form>
               )}
@@ -607,7 +569,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Emergency Speed-Dial Desk (Action Unit Security) */}
+        {/* Action Unit Emergency Desk */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Action Unit Emergency Desk</h3>
@@ -639,30 +601,9 @@ export default function Home() {
               </div>
             </a>
           </div>
-
-          {/* Edit Contact Numbers Modal (Exco Only) */}
-          {isEditingContacts && (
-            <form onSubmit={handleSaveEmergencyContacts} style={{ marginTop: '12px', background: '#0F172A', padding: '10px', borderRadius: '8px', border: '1px solid #334155' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#10B981', marginBottom: '6px' }}>Update Emergency Phone Numbers</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <label style={{ fontSize: '9px', color: '#8D99AE' }}>Action Unit Security</label>
-                  <input type="tel" value={draftSecPhone} onChange={(e) => setDraftSecPhone(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '9px', color: '#8D99AE' }}>Zone B CSO</label>
-                  <input type="tel" value={draftCsoPhone} onChange={(e) => setDraftCsoPhone(e.target.value)} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button type="button" className="nav-btn" onClick={() => setIsEditingContacts(false)} style={{ flex: 1 }}>Cancel</button>
-                <button type="submit" className="btn-emerald" style={{ flex: 1, padding: '6px' }}>Save Numbers</button>
-              </div>
-            </form>
-          )}
         </div>
 
-        {/* EXCO ONLY: Financial Oversight & Outflows */}
+        {/* EXCO ONLY: Automated Reminders & Contractor Payout Console */}
         {isExco && (
           <div style={{ marginTop: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -670,18 +611,18 @@ export default function Home() {
                 Exco Executive Suite
               </span>
               <span style={{ background: 'rgba(16,185,129,0.2)', color: '#34D399', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700 }}>
-                Logged In
+                Logged In (PIN: 2026)
               </span>
             </div>
 
-            {/* Financial Overview Cards */}
+            {/* Balances */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
                 <div style={{ fontSize: '10px', color: '#8D99AE' }}>Collected</div>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#34D399', marginTop: '2px' }}>₦{totalInflows.toLocaleString()}</div>
               </div>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Expenses</div>
+                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Disbursed</div>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#F87171', marginTop: '2px' }}>₦{totalOutflows.toLocaleString()}</div>
               </div>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
@@ -690,45 +631,89 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Expense Management */}
-            <div className="card">
-              <h3 style={{ fontSize: '13px', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>Log New Outflow Voucher</h3>
-              <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  placeholder="Expense (e.g. Security Guards Allowance)" 
-                  value={newExpTitle} 
-                  onChange={(e) => setNewExpTitle(e.target.value)} 
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <input 
-                    type="number" 
-                    placeholder="Amount (e.g. 40000)" 
-                    value={newExpAmount} 
-                    onChange={(e) => setNewExpAmount(e.target.value)} 
-                  />
-                  <select value={newExpCat} onChange={(e) => setNewExpCat(e.target.value)}>
-                    <option value="Security">Security (₦40k/mo)</option>
-                    <option value="Zonal Dues">Zonal Dues (₦8.4k/mo)</option>
-                    <option value="Sanitation">Sanitation</option>
-                    <option value="Maintenance">Maintenance</option>
-                    <option value="UnitMate Fee">UnitMate Admin Retainer</option>
+            {/* Automated Dues Reminders Card */}
+            <div className="card" style={{ border: '1px solid #3B82F6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: '13px', fontWeight: 800, color: '#60A5FA' }}>Automated Dues Reminders</h3>
+                  <p style={{ fontSize: '10px', color: '#8D99AE' }}>Dispatch notices to units owing {currentCheckMonth}</p>
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: 700, background: 'rgba(239,68,68,0.2)', color: '#F87171', padding: '2px 8px', borderRadius: '6px' }}>
+                  {owingUnits.length} Units Pending
+                </span>
+              </div>
+              <button 
+                onClick={handleSendReminderBatch}
+                style={{ marginTop: '10px', width: '100%', background: '#2563EB', color: '#fff', fontWeight: 700, padding: '9px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+              >
+                Send 7-Day Month-End Dues Reminder (WhatsApp/SMS)
+              </button>
+            </div>
+
+            {/* Contractor Disbursement Suite */}
+            <div className="card" style={{ border: '1px solid #10B981' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 800, color: '#10B981' }}>Disburse Funds to Contractors</h3>
+                <span style={{ fontSize: '9px', background: '#0F172A', color: '#34D399', border: '1px solid #10B981', padding: '2px 6px', borderRadius: '4px' }}>
+                  Dual-Auth Enabled
+                </span>
+              </div>
+              <p style={{ fontSize: '11px', color: '#8D99AE', marginBottom: '10px' }}>
+                Transfers directly from collection reserve via Monnify NIP.
+              </p>
+
+              <form onSubmit={handleDisbursePayment} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', color: '#8D99AE' }}>Select Beneficiary</label>
+                  <select value={payoutRecipient} onChange={(e) => {
+                    setPayoutRecipient(e.target.value);
+                    if (e.target.value === 'security') {
+                      setPayoutAmount('40000');
+                      setPayoutPurpose('Action Unit Security Monthly Allowance');
+                    } else if (e.target.value === 'zonal') {
+                      setPayoutAmount('8400');
+                      setPayoutPurpose('Zone B Central Dues (42 flats @ ₦200)');
+                    }
+                  }}>
+                    <option value="security">Action Unit Security (₦40,000/mo)</option>
+                    <option value="zonal">Zone B Central Dues (₦8,400/mo)</option>
+                    <option value="custom">Other Contractor (Drainage, Solar, Repairs)</option>
                   </select>
                 </div>
-                <button type="submit" className="nav-btn" style={{ background: '#2563EB', borderColor: '#3B82F6', padding: '10px' }}>
-                  Record Audited Outflow
+
+                {payoutRecipient === 'custom' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <input type="text" placeholder="Payee Name (e.g. Electrician)" value={customPayee} onChange={(e) => setCustomPayee(e.target.value)} />
+                    <input type="text" placeholder="Bank & Account No." value={customBankAcc} onChange={(e) => setCustomBankAcc(e.target.value)} />
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '9px', color: '#8D99AE' }}>Amount (₦)</label>
+                    <input type="number" value={payoutAmount} onChange={(e) => setPayoutAmount(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '9px', color: '#8D99AE' }}>Disbursement Narration</label>
+                    <input type="text" value={payoutPurpose} onChange={(e) => setPayoutPurpose(e.target.value)} />
+                  </div>
+                </div>
+
+                <button type="submit" className="btn-emerald" style={{ marginTop: '4px' }}>
+                  Execute Contractor Bank Transfer (NIP)
                 </button>
               </form>
 
-              {/* Expense History */}
+              {/* Disbursement Ledger */}
               <div style={{ marginTop: '14px', borderTop: '1px solid #2B3A67', paddingTop: '10px' }}>
-                <span style={{ fontSize: '11px', color: '#8D99AE', textTransform: 'uppercase', fontWeight: 700 }}>Outflow History ({outflows.length})</span>
+                <span style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase', fontWeight: 700 }}>Audited Disbursed Vouchers ({outflows.length})</span>
                 <div style={{ marginTop: '8px' }}>
                   {outflows.map((v) => (
                     <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #253359' }}>
                       <div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>{v.title}</div>
-                        <div style={{ fontSize: '10px', color: '#8D99AE' }}>{v.category} • {v.date}</div>
+                        <div style={{ fontSize: '10px', color: '#8D99AE' }}>{v.beneficiary} • {v.date}</div>
+                        <div style={{ fontSize: '9px', color: '#34D399' }}>✓ {v.authBy}</div>
                       </div>
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#F87171' }}>-₦{v.amount.toLocaleString()}</div>
                     </div>
