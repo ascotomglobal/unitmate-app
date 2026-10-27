@@ -19,7 +19,9 @@ interface BaseUnit {
   id: string;
   name: string;
   category: 'residential' | 'commercial';
-  ratePerMonth: number;
+  unitDue: number;       // ₦2,000 for flats
+  zonalDue: number;      // ₦200 for flats (₦0 for shops)
+  techFee: number;       // ₦50 automated processing
   contactName: string;
   phone: string;
   passcode: string;
@@ -35,7 +37,6 @@ interface OutflowRecord {
   category: string;
   date: string;
   amount: number;
-  status: 'Disbursed' | 'Pending Approval';
   authBy: string;
 }
 
@@ -76,8 +77,8 @@ export default function Home() {
 
   // Disbursed Outflows
   const [outflows, setOutflows] = useState<OutflowRecord[]>([
-    { id: 'SEC-OCT-25', title: 'Day/Night Security Monthly Allowance', beneficiary: 'Musa Ibrahim (Head Guard)', bankAccount: 'Access Bank - 0129384756', category: 'Security', date: '2025-10-31', amount: 40000, status: 'Disbursed', authBy: 'Treasurer & Chairman' },
-    { id: 'ZONE-OCT-25', title: 'Zone B Central Dues (42 flats @ ₦200)', beneficiary: 'Zone B Central Account', bankAccount: 'Wema Bank - 9928400010', category: 'Zonal Dues', date: '2025-10-31', amount: 8400, status: 'Disbursed', authBy: 'Treasurer' }
+    { id: 'SEC-OCT-25', title: 'Day/Night Security Monthly Allowance', beneficiary: 'Musa Ibrahim (Head Guard)', bankAccount: 'Access Bank - 0129384756', category: 'Security', date: '2025-10-31', amount: 40000, authBy: 'Treasurer & Chairman' },
+    { id: 'ZONE-OCT-25', title: 'Zone B Central Levy Remittance', beneficiary: 'Zone B Central Treasury', bankAccount: 'Wema Bank - 9928400010', category: 'Zonal Dues', date: '2025-10-31', amount: 8400, authBy: 'Treasurer' }
   ]);
 
   // Exco States
@@ -100,9 +101,9 @@ export default function Home() {
 
   // Load state
   useEffect(() => {
-    const savedUnits = localStorage.getItem('unitmate_v7_units');
+    const savedUnits = localStorage.getItem('unitmate_v8_units');
     const savedNotice = localStorage.getItem('unitmate_notice');
-    const savedOutflows = localStorage.getItem('unitmate_v7_outflows');
+    const savedOutflows = localStorage.getItem('unitmate_v8_outflows');
     const savedSec = localStorage.getItem('unitmate_sec_phone');
     const savedCso = localStorage.getItem('unitmate_cso_phone');
 
@@ -123,7 +124,9 @@ export default function Home() {
             id: key,
             name: `Block ${b}, Flat ${f}`,
             category: 'residential',
-            ratePerMonth: 2000,
+            unitDue: 2000,
+            zonalDue: 200,
+            techFee: 50,
             contactName: 'Occupant',
             phone: '',
             passcode: `${b}${f}`,
@@ -138,7 +141,9 @@ export default function Home() {
           id: s.id,
           name: s.name,
           category: 'commercial',
-          ratePerMonth: s.rate,
+          unitDue: s.rate,
+          zonalDue: 0,
+          techFee: 0,
           contactName: 'Shop Operator',
           phone: '',
           passcode: s.code,
@@ -148,13 +153,13 @@ export default function Home() {
       });
 
       setUnits(initial);
-      localStorage.setItem('unitmate_v7_units', JSON.stringify(initial));
+      localStorage.setItem('unitmate_v8_units', JSON.stringify(initial));
     }
   }, []);
 
   const saveAllUnits = (updated: Record<string, BaseUnit>) => {
     setUnits(updated);
-    localStorage.setItem('unitmate_v7_units', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v8_units', JSON.stringify(updated));
   };
 
   const handleLookup = () => {
@@ -205,7 +210,6 @@ export default function Home() {
     alert('Occupant record & Passcode updated successfully');
   };
 
-  // Execute Direct Contractor Payout (Disbursement API simulation)
   const handleDisbursePayment = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(payoutAmount);
@@ -220,7 +224,7 @@ export default function Home() {
       payeeBank = 'Assigned Guard Account (NIP)';
       category = 'Security';
     } else if (payoutRecipient === 'zonal') {
-      payeeName = 'Zone B Central Executive Desk';
+      payeeName = 'Zone B Central Treasury Desk';
       payeeBank = 'Wema Bank - 9928400010';
       category = 'Zonal Dues';
     } else {
@@ -238,13 +242,12 @@ export default function Home() {
       category,
       date: new Date().toISOString().split('T')[0],
       amount: amt,
-      status: 'Disbursed',
       authBy: 'Treasurer & Chairman (Dual Auth)'
     };
 
     const updated = [newDisbursement, ...outflows];
     setOutflows(updated);
-    localStorage.setItem('unitmate_v7_outflows', JSON.stringify(updated));
+    localStorage.setItem('unitmate_v8_outflows', JSON.stringify(updated));
     alert(`DISBURSEMENT SUCCESSFUL:\n₦${amt.toLocaleString()} transferred via Monnify to ${payeeName}.\nAudited voucher generated.`);
     if (payoutRecipient === 'custom') {
       setCustomPayee('');
@@ -252,27 +255,32 @@ export default function Home() {
     }
   };
 
-  // Automated Reminder Dispatch Generator
+  // Automated Reminder Dispatch
   const currentCheckMonth = 'Jan 2026';
   const owingUnits = Object.values(units).filter(u => !u.paidMonths.includes(currentCheckMonth));
 
   const handleSendReminderBatch = () => {
     if (owingUnits.length === 0) return alert('All 42 flats and 7 shops have cleared dues for this period.');
     const sample = owingUnits[0];
+    const totalRate = sample.unitDue + sample.zonalDue + sample.techFee;
     const text = `*ACTION UNIT DUES REMINDER*%0A`
       + `Dear Resident (${sample.name}),%0A`
-      + `This is a reminder that Action Unit security and maintenance dues for ${currentCheckMonth} (₦${sample.ratePerMonth.toLocaleString()}) are due.%0A`
-      + `Please transfer directly to your dedicated unit account:%0A`
+      + `This is a reminder for ${currentCheckMonth} dues:%0A`
+      + `• Action Unit Security: ₦${sample.unitDue.toLocaleString()}%0A`
+      + (sample.zonalDue > 0 ? `• Zone B Central Levy: ₦${sample.zonalDue.toLocaleString()}%0A` : '')
+      + (sample.techFee > 0 ? `• Direct Transfer Processing: ₦${sample.techFee.toLocaleString()}%0A` : '')
+      + `*Total Payable:* ₦${totalRate.toLocaleString()}%0A%0A`
+      + `Transfer directly to your dedicated virtual account:%0A`
       + `*Account:* ${sample.customAccount}%0A`
       + `*Bank:* Wema Bank (Monnify)%0A`
       + `*Beneficiary:* UnitMate - ${sample.name}%0A`
-      + `_Ignore if already paid. Verified by Ascotom Global._`;
+      + `_Instant WhatsApp receipt generated automatically._`;
 
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   // Financial Balances
-  const totalInflows = Object.values(units).reduce((acc, u) => acc + (u.paidMonths.length * u.ratePerMonth), 0);
+  const totalInflows = Object.values(units).reduce((acc, u) => acc + (u.paidMonths.length * (u.unitDue + u.zonalDue + u.techFee)), 0);
   const totalOutflows = outflows.reduce((acc, o) => acc + o.amount, 0);
   const liquidReserve = totalInflows - totalOutflows;
 
@@ -280,6 +288,26 @@ export default function Home() {
   const arrears2025Unpaid = activeUnit ? ARREARS_2025.filter(m => !activeUnit.paidMonths.includes(m)) : [];
   const calendar2026Paid = activeUnit ? CALENDAR_2026.filter(m => activeUnit.paidMonths.includes(m)) : [];
   const advance2027Paid = activeUnit ? ADVANCE_2027.filter(m => activeUnit.paidMonths.includes(m)) : [];
+
+  const handleShareWhatsApp = () => {
+    if (!activeUnit) return;
+    const rate = activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee;
+    const totalPaid = activeUnit.paidMonths.length * rate;
+    const arrearsText = arrears2025Unpaid.length === 0 ? 'CLEARED' : `${arrears2025Unpaid.join(', ')} Owed`;
+    const advanceText = advance2027Paid.length > 0 ? `%0A*🌟 Advance 2027 Paid:* ${advance2027Paid.length} Months (${advance2027Paid.join(', ')})` : '';
+
+    const text = `*UNITMATE OFFICIAL STATEMENT*%0A`
+      + `*Unit:* ${activeUnit.name}%0A`
+      + `*Registered:* ${activeUnit.contactName}%0A`
+      + `*Itemized Rate:* ₦${activeUnit.unitDue} (Sec) + ₦${activeUnit.zonalDue} (Zone B) + ₦${activeUnit.techFee} (Token)%0A`
+      + `*Monthly Obligation:* ₦${rate.toLocaleString()}/mo%0A`
+      + `*2025 Arrears (Oct-Dec):* ${arrearsText}%0A`
+      + `*2026 Status:* ${calendar2026Paid.length}/12 Months Cleared`
+      + advanceText + `%0A`
+      + `*Total Contributed to Date:* ₦${totalPaid.toLocaleString()}%0A`
+      + `*Action Unit, Zone B (Ascotom Global)*`;
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0B132B', color: '#E0E1DD', fontFamily: 'system-ui, sans-serif' }}>
@@ -407,7 +435,7 @@ export default function Home() {
             {isExco ? 'Inspect Dues Record (Exco Bypass)' : 'Unlock Statement & Account'}
           </button>
 
-          {/* Unit Statement */}
+          {/* Unit Statement with Itemized Breakdown */}
           {activeUnit && (
             <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #2B3A67' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -444,8 +472,35 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Itemized Dues Schedule Card */}
+              <div style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '10px', padding: '10px 12px', margin: '12px 0' }}>
+                <span style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase', fontWeight: 700 }}>Monthly Schedule Breakdown</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '6px', color: '#CBD5E1' }}>
+                  <span>Action Unit Security & Operations</span>
+                  <strong style={{ color: '#fff' }}>₦{activeUnit.unitDue.toLocaleString()}</strong>
+                </div>
+                {activeUnit.zonalDue > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px', color: '#CBD5E1' }}>
+                    <span>Zone B Central Administrative Levy</span>
+                    <strong style={{ color: '#FBBF24' }}>₦{activeUnit.zonalDue.toLocaleString()}</strong>
+                  </div>
+                )}
+                {activeUnit.techFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px', color: '#CBD5E1' }}>
+                    <span>Digital Monnify Gateway & WhatsApp Token</span>
+                    <strong style={{ color: '#38BDF8' }}>₦{activeUnit.techFee.toLocaleString()}</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #1F2937', color: '#fff' }}>
+                  <span>Total Due Per Month:</span>
+                  <strong style={{ color: '#34D399', fontSize: '14px' }}>
+                    ₦{(activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee).toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+
               {/* Dedicated Account */}
-              <div style={{ background: '#0F172A', borderRadius: '10px', padding: '12px', margin: '12px 0', border: '1px solid #1E293B' }}>
+              <div style={{ background: '#0F172A', borderRadius: '10px', padding: '12px', marginBottom: '12px', border: '1px solid #1E293B' }}>
                 <div style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>Dedicated Monnify Inflow Account</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                   <span style={{ fontSize: '18px', fontWeight: 800, color: '#34D399', letterSpacing: '1px', fontFamily: 'monospace' }}>
@@ -536,18 +591,30 @@ export default function Home() {
               {/* Totals */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center', marginTop: '14px' }}>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Rate</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>₦{activeUnit.ratePerMonth.toLocaleString()}/mo</div>
+                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Total Contributed</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#34D399' }}>
+                    ₦{(activeUnit.paidMonths.length * (activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee)).toLocaleString()}
+                  </div>
                 </div>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Total Paid</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#34D399' }}>₦{(activeUnit.paidMonths.length * activeUnit.ratePerMonth).toLocaleString()}</div>
+                  <div style={{ fontSize: '9px', color: '#8D99AE' }}>Zone B Pool</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#FBBF24' }}>
+                    ₦{(activeUnit.paidMonths.length * activeUnit.zonalDue).toLocaleString()}
+                  </div>
                 </div>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '9px', color: '#8D99AE' }}>Cleared</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8' }}>{activeUnit.paidMonths.length} Months</div>
                 </div>
               </div>
+
+              {/* WhatsApp Share Button */}
+              <button 
+                onClick={handleShareWhatsApp}
+                style={{ marginTop: '14px', width: '100%', background: '#25D366', color: '#064E3B', fontWeight: 800, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}
+              >
+                Share Itemized Clearance to WhatsApp
+              </button>
 
               {isExco && (
                 <form onSubmit={handleSaveContactInfo} style={{ marginTop: '14px', background: '#111827', padding: '12px', borderRadius: '8px', border: '1px dashed #10B981' }}>
@@ -569,7 +636,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Action Unit Emergency Desk */}
+        {/* Emergency Speed-Dial Desk */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Action Unit Emergency Desk</h3>
@@ -618,7 +685,7 @@ export default function Home() {
             {/* Balances */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Collected</div>
+                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Total Reserve</div>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#34D399', marginTop: '2px' }}>₦{totalInflows.toLocaleString()}</div>
               </div>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
@@ -626,7 +693,7 @@ export default function Home() {
                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#F87171', marginTop: '2px' }}>₦{totalOutflows.toLocaleString()}</div>
               </div>
               <div style={{ background: '#151D35', border: '1px solid #253359', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Reserve</div>
+                <div style={{ fontSize: '10px', color: '#8D99AE' }}>Liquid Float</div>
                 <div style={{ fontSize: '13px', fontWeight: '800', color: liquidReserve >= 0 ? '#38BDF8' : '#F87171', marginTop: '2px' }}>₦{liquidReserve.toLocaleString()}</div>
               </div>
             </div>
@@ -659,7 +726,7 @@ export default function Home() {
                 </span>
               </div>
               <p style={{ fontSize: '11px', color: '#8D99AE', marginBottom: '10px' }}>
-                Transfers directly from collection reserve via Monnify NIP.
+                Direct bank transfer via Monnify NIP.
               </p>
 
               <form onSubmit={handleDisbursePayment} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -676,7 +743,7 @@ export default function Home() {
                     }
                   }}>
                     <option value="security">Action Unit Security (₦40,000/mo)</option>
-                    <option value="zonal">Zone B Central Dues (₦8,400/mo)</option>
+                    <option value="zonal">Zone B Central Levy (₦8,400/mo)</option>
                     <option value="custom">Other Contractor (Drainage, Solar, Repairs)</option>
                   </select>
                 </div>
