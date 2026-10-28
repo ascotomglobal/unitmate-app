@@ -1,7 +1,39 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+declare global {
+  interface Window {
+    MonnifySDK: any;
+  }
+}
 
+const payWithMonnify = (block: string, flat: string, amount: number) => {
+  if (typeof window === "undefined" || !window.MonnifySDK) {
+    alert("Payment gateway is initializing, please try again in a moment.");
+    return;
+  }
+
+  window.MonnifySDK.initialize({
+    amount: amount,
+    currency: "NGN",
+    reference: `UM_${block.replace(/\s+/g, "")}_${flat.replace(/\s+/g, "")}_${Date.now()}`,
+    customerFullName: `Resident - ${block}, ${flat}`,
+    customerEmail: `resident-${block.toLowerCase()}-${flat.toLowerCase()}@unitmate.ng`.replace(/\s+/g, ""),
+    apiKey: process.env.NEXT_PUBLIC_MONNIFY_API_KEY || "MK_TEST_XXXXXXXXXX",
+    contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE || "4HT2DW13YC5P",
+    paymentDescription: `UnitMate Dues - ${block}, ${flat}`,
+    isTestMode: false,
+    onComplete: function (response: any) {
+      if (response.paymentStatus === "PAID") {
+        alert("Payment successful! Your dues clearance record has updated.");
+        window.location.reload();
+      }
+    },
+    onClose: function () {
+      console.log("Monnify payment closed");
+    },
+  });
+};
 // Horizons: 2025 Arrears (3 mo) + 2026 Calendar (12 mo) + 2027 Advance (12 mo)
 const ARREARS_2025 = ['Oct 2025', 'Nov 2025', 'Dec 2025'];
 const CALENDAR_2026 = [
@@ -498,7 +530,28 @@ export default function Home() {
                   </strong>
                 </div>
               </div>
-
+<button
+  type="button"
+  onClick={() => payWithMonnify(selectedBlock, selectedFlat, 2250)}
+  style={{
+    width: '100%',
+    marginBottom: '12px',
+    padding: '12px 16px',
+    background: '#10B981',
+    color: '#090D16',
+    fontWeight: 'bold',
+    borderRadius: '10px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+  }}
+>
+  💳 Pay ₦2,250 Online (Card / USSD / Transfer)
+</button>
               {/* Dedicated Account */}
               <div style={{ background: '#0F172A', borderRadius: '10px', padding: '12px', marginBottom: '12px', border: '1px solid #1E293B' }}>
                 <div style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>Dedicated Monnify Inflow Account</div>
