@@ -19,10 +19,10 @@ const payWithMonnify = (block: string, flat: string, amount: number) => {
     reference: `UM_${block.replace(/\s+/g, "")}_${flat.replace(/\s+/g, "")}_${Date.now()}`,
     customerFullName: `Resident - ${block}, ${flat}`,
     customerEmail: `resident-${block.toLowerCase()}-${flat.toLowerCase()}@unitmate.ng`.replace(/\s+/g, ""),
-    apiKey: process.env.NEXT_PUBLIC_MONNIFY_API_KEY || "MK_TEST_XXXXXXXXXX",
-    contractCode: process.env.NEXT_PUBLIC_MONNIFY_CONTRACT_CODE || "4HT2DW13YC5P",
+    apiKey: MK_TEST_LZXDVQWHM2,
+    contractCode: 5709684727,
     paymentDescription: `UnitMate Dues - ${block}, ${flat}`,
-    isTestMode: false,
+    isTestMode: true,
     onComplete: function (response: any) {
       if (response.paymentStatus === "PAID") {
         alert("Payment successful! Your dues clearance record has updated.");
