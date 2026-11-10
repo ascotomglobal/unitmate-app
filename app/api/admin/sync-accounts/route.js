@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://iapgvoyisrjgusktkojh.supabase.co';
@@ -14,8 +13,6 @@ export async function GET() {
       { status: 500 }
     );
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // 1. Authenticate with Monnify Live
   const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
@@ -33,19 +30,25 @@ export async function GET() {
   }
   const token = authData.responseBody.accessToken;
 
-  // 2. Fetch all 42 residential flats missing bank accounts
-  const { data: flats, error } = await supabase
-    .from('flats')
-    .select('*')
-    .eq('unit_type', 'residential')
-    .is('monnify_account_number', null);
+  // 2. Fetch the 42 residential flats lacking account numbers via Supabase REST API
+  const getFlatsRes = await fetch(
+    `${supabaseUrl}/rest/v1/flats?unit_type=eq.residential&monnify_account_number=is.null&select=*`,
+    {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+    }
+  );
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const flats = await getFlatsRes.json();
+  if (!Array.isArray(flats)) {
+    return NextResponse.json({ error: 'Failed to query Supabase', details: flats }, { status: 500 });
   }
 
   const updatedFlats = [];
 
+  // 3. Request reserved account for each flat from Monnify
   for (const flat of flats) {
     try {
       const monRes = await fetch(
@@ -75,13 +78,20 @@ export async function GET() {
             a.bankName.toLowerCase().includes('wema')
           ) || monData.responseBody.accounts[0];
 
-        await supabase
-          .from('flats')
-          .update({
+        // Update record in Supabase REST API
+        await fetch(`${supabaseUrl}/rest/v1/flats?id=eq.${flat.id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({
             monnify_account_number: preferred.accountNumber,
             monnify_bank_name: preferred.bankName,
-          })
-          .eq('id', flat.id);
+          }),
+        });
 
         updatedFlats.push({
           unit: `${flat.block} ${flat.flat}`,
