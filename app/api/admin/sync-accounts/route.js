@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://iapgvoyisrjgusktkojh.supabase.co';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const apiKey = process.env.MONNIFY_API_KEY;
-  const secretKey = process.env.MONNIFY_SECRET_KEY;
-  const contractCode = process.env.MONNIFY_CONTRACT_CODE;
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const apiKey = (process.env.MONNIFY_API_KEY || '').trim();
+  const secretKey = (process.env.MONNIFY_SECRET_KEY || '').trim();
+  const contractCode = (process.env.MONNIFY_CONTRACT_CODE || '').trim();
 
   if (!supabaseKey || !apiKey || !secretKey || !contractCode) {
     return NextResponse.json(
@@ -14,9 +14,13 @@ export async function GET() {
     );
   }
 
-  // 1. Authenticate with Monnify Live
+  // Detect whether keys are Test or Live
+  const isTest = apiKey.startsWith('MK_TEST_');
+  const baseUrl = isTest ? 'https://sandbox.monnify.com' : 'https://api.monnify.com';
+
+  // 1. Authenticate with Monnify
   const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
-  const authRes = await fetch('https://api.monnify.com/api/v1/auth/login', {
+  const authRes = await fetch(`${baseUrl}/api/v1/auth/login`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${credentials}`,
@@ -26,11 +30,16 @@ export async function GET() {
 
   const authData = await authRes.json();
   if (!authData.requestSuccessful) {
-    return NextResponse.json({ error: authData.responseMessage }, { status: 400 });
+    return NextResponse.json({
+      error: authData.responseMessage,
+      keyPrefixUsed: apiKey.slice(0, 8),
+      targetEnvironment: isTest ? 'Sandbox' : 'Production',
+      raw: authData
+    }, { status: 400 });
   }
   const token = authData.responseBody.accessToken;
 
-  // 2. Fetch the 42 residential flats lacking account numbers via Supabase REST API
+  // 2. Fetch residential flats lacking accounts from Supabase
   const getFlatsRes = await fetch(
     `${supabaseUrl}/rest/v1/flats?unit_type=eq.residential&monnify_account_number=is.null&select=*`,
     {
@@ -48,11 +57,11 @@ export async function GET() {
 
   const updatedFlats = [];
 
-  // 3. Request reserved account for each flat from Monnify
+  // 3. Request reserved account for each flat
   for (const flat of flats) {
     try {
       const monRes = await fetch(
-        'https://api.monnify.com/api/v2/bank-transfer/reserved-accounts',
+        `${baseUrl}/api/v2/bank-transfer/reserved-accounts`,
         {
           method: 'POST',
           headers: {
@@ -78,7 +87,6 @@ export async function GET() {
             a.bankName.toLowerCase().includes('wema')
           ) || monData.responseBody.accounts[0];
 
-        // Update record in Supabase REST API
         await fetch(`${supabaseUrl}/rest/v1/flats?id=eq.${flat.id}`, {
           method: 'PATCH',
           headers: {
@@ -106,6 +114,7 @@ export async function GET() {
 
   return NextResponse.json({
     success: true,
+    environmentUsed: isTest ? 'Sandbox' : 'Production',
     totalAssigned: updatedFlats.length,
     flats: updatedFlats,
   });
