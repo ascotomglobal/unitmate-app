@@ -11,7 +11,8 @@ export async function GET() {
   }
 
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/flats?select=block,flat,monnify_account_number,monnify_bank_name`,
+    `${supabaseUrl}/rest/v1/flats?select=block,flat,monnify_account_number,monnify_bank_name,paid_months`
+,
     {
       headers: {
         apikey: supabaseKey,
