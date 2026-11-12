@@ -1,28 +1,34 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 declare global {
   interface Window {
     MonnifySDK: any;
   }
 }
 
-const payWithMonnify = (block: string, flat: string, amount: number) => {
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://iapgvoyisrjgusktkojh.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+const payWithMonnify = (unitName: string, amount: number) => {
   if (typeof window === "undefined" || !window.MonnifySDK) {
     alert("Payment gateway is initializing, please try again in a moment.");
     return;
   }
 
+  const cleanRef = unitName.replace(/[^a-zA-Z0-9]/g, "");
+
   window.MonnifySDK.initialize({
     amount: amount,
     currency: "NGN",
-    reference: `UM_${block.replace(/\s+/g, "")}_${flat.replace(/\s+/g, "")}_${Date.now()}`,
-    customerFullName: `Resident - ${block}, ${flat}`,
-    customerEmail: `resident-${block.toLowerCase()}-${flat.toLowerCase()}@unitmate.ng`.replace(/\s+/g, ""),
+    reference: `UM_${cleanRef}_${Date.now()}`,
+    customerFullName: `Resident - ${unitName}`,
+    customerEmail: `resident.${cleanRef.toLowerCase()}@unitmate.ng`,
     apiKey: "MK_TEST_LZXDVQWHM2",
-contractCode: "5709684727",
-paymentDescription: `UnitMate Dues - ${block}, ${flat}`,
-isTestMode: false,
+    contractCode: "5709684727",
+    paymentDescription: `UnitMate Dues - ${unitName}`,
+    isTestMode: true,
 
     onComplete: function (response: any) {
       if (response.paymentStatus === "PAID") {
@@ -35,6 +41,7 @@ isTestMode: false,
     },
   });
 };
+
 // Horizons: 2025 Arrears (3 mo) + 2026 Calendar (12 mo) + 2027 Advance (12 mo)
 const ARREARS_2025 = ['Oct 2025', 'Nov 2025', 'Dec 2025'];
 const CALENDAR_2026 = [
@@ -60,6 +67,7 @@ interface BaseUnit {
   passcode: string;
   paidMonths: string[];
   customAccount: string;
+  bankName?: string;
 }
 
 interface OutflowRecord {
@@ -132,7 +140,7 @@ export default function Home() {
   const [payoutAmount, setPayoutAmount] = useState('40000');
   const [payoutPurpose, setPayoutPurpose] = useState('Action Unit Security Monthly Allowance');
 
-  // Load state
+  // Load state & sync real Monnify accounts from Supabase
   useEffect(() => {
     const savedUnits = localStorage.getItem('unitmate_v8_units');
     const savedNotice = localStorage.getItem('unitmate_notice');
@@ -145,15 +153,15 @@ export default function Home() {
     if (savedCso) setCsoPhone(savedCso);
     if (savedOutflows) setOutflows(JSON.parse(savedOutflows));
 
-    if (savedUnits) {
-      setUnits(JSON.parse(savedUnits));
-    } else {
-      const initial: Record<string, BaseUnit> = {};
+    let currentUnits: Record<string, BaseUnit> = {};
 
+    if (savedUnits) {
+      currentUnits = JSON.parse(savedUnits);
+    } else {
       DEFAULT_BLOCKS.forEach(b => {
         for (let f = 1; f <= FLATS_PER_BLOCK; f++) {
           const key = `FLAT-${b}-${f}`;
-          initial[key] = {
+          currentUnits[key] = {
             id: key,
             name: `Block ${b}, Flat ${f}`,
             category: 'residential',
@@ -164,13 +172,14 @@ export default function Home() {
             phone: '',
             passcode: `${b}${f}`,
             paidMonths: [],
-            customAccount: `9928${b}${f}`
+            customAccount: `9928${b}${f}`,
+            bankName: 'Wema Bank'
           };
         }
       });
 
       INITIAL_SHOPS.forEach(s => {
-        initial[s.id] = {
+        currentUnits[s.id] = {
           id: s.id,
           name: s.name,
           category: 'commercial',
@@ -181,13 +190,61 @@ export default function Home() {
           phone: '',
           passcode: s.code,
           paidMonths: [],
-          customAccount: s.account
+          customAccount: s.account,
+          bankName: 'Wema Bank'
         };
       });
-
-      setUnits(initial);
-      localStorage.setItem('unitmate_v8_units', JSON.stringify(initial));
     }
+
+    setUnits(currentUnits);
+
+    // Fetch live Monnify virtual accounts from Supabase
+    const syncMonnifyFromSupabase = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (SUPABASE_ANON_KEY) {
+          headers['apikey'] = SUPABASE_ANON_KEY;
+          headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+        }
+
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/flats?select=block,flat,monnify_account_number,monnify_bank_name`,
+          { headers }
+        );
+        if (!res.ok) return;
+
+        const dbFlats = await res.json();
+        if (!Array.isArray(dbFlats)) return;
+
+        const merged = { ...currentUnits };
+        let hasUpdates = false;
+
+        dbFlats.forEach((row: any) => {
+          if (!row.monnify_account_number) return;
+          const blockNum = String(row.block).replace(/\D/g, '');
+          const flatNum = String(row.flat).replace(/\D/g, '');
+          const key = `FLAT-${blockNum}-${flatNum}`;
+
+          if (merged[key]) {
+            merged[key] = {
+              ...merged[key],
+              customAccount: row.monnify_account_number,
+              bankName: row.monnify_bank_name || 'Wema Bank'
+            };
+            hasUpdates = true;
+          }
+        });
+
+        if (hasUpdates) {
+          setUnits(merged);
+          localStorage.setItem('unitmate_v8_units', JSON.stringify(merged));
+        }
+      } catch (err) {
+        console.error('Supabase account sync error:', err);
+      }
+    };
+
+    syncMonnifyFromSupabase();
   }, []);
 
   const saveAllUnits = (updated: Record<string, BaseUnit>) => {
@@ -305,7 +362,7 @@ export default function Home() {
       + `*Total Payable:* ₦${totalRate.toLocaleString()}%0A%0A`
       + `Transfer directly to your dedicated virtual account:%0A`
       + `*Account:* ${sample.customAccount}%0A`
-      + `*Bank:* Wema Bank (Monnify)%0A`
+      + `*Bank:* ${sample.bankName || 'Wema Bank'} (Monnify)%0A`
       + `*Beneficiary:* UnitMate - ${sample.name}%0A`
       + `_Instant WhatsApp receipt generated automatically._`;
 
@@ -321,6 +378,7 @@ export default function Home() {
   const arrears2025Unpaid = activeUnit ? ARREARS_2025.filter(m => !activeUnit.paidMonths.includes(m)) : [];
   const calendar2026Paid = activeUnit ? CALENDAR_2026.filter(m => activeUnit.paidMonths.includes(m)) : [];
   const advance2027Paid = activeUnit ? ADVANCE_2027.filter(m => activeUnit.paidMonths.includes(m)) : [];
+  const activeUnitMonthlyTotal = activeUnit ? (activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee) : 2250;
 
   const handleShareWhatsApp = () => {
     if (!activeUnit) return;
@@ -527,32 +585,34 @@ export default function Home() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #1F2937', color: '#fff' }}>
                   <span>Total Due Per Month:</span>
                   <strong style={{ color: '#34D399', fontSize: '14px' }}>
-                    ₦{(activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee).toLocaleString()}
+                    ₦{activeUnitMonthlyTotal.toLocaleString()}
                   </strong>
                 </div>
               </div>
-<button
-  type="button"
-  onClick={() => payWithMonnify(selectedBlock, selectedFlat, 2250)}
-  style={{
-    width: '100%',
-    marginBottom: '12px',
-    padding: '12px 16px',
-    background: '#10B981',
-    color: '#090D16',
-    fontWeight: 'bold',
-    borderRadius: '10px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '14px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-  }}
->
-  💳 Pay ₦2,250 Online (Card / USSD / Transfer)
-</button>
+
+              <button
+                type="button"
+                onClick={() => payWithMonnify(activeUnit.name, activeUnitMonthlyTotal)}
+                style={{
+                  width: '100%',
+                  marginBottom: '12px',
+                  padding: '12px 16px',
+                  background: '#10B981',
+                  color: '#090D16',
+                  fontWeight: 'bold',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                💳 Pay ₦{activeUnitMonthlyTotal.toLocaleString()} Online (Card / USSD / Transfer)
+              </button>
+
               {/* Dedicated Account */}
               <div style={{ background: '#0F172A', borderRadius: '10px', padding: '12px', marginBottom: '12px', border: '1px solid #1E293B' }}>
                 <div style={{ fontSize: '10px', color: '#8D99AE', textTransform: 'uppercase' }}>Dedicated Monnify Inflow Account</div>
@@ -572,7 +632,7 @@ export default function Home() {
                   </button>
                 </div>
                 <p style={{ fontSize: '10px', color: '#8D99AE', marginTop: '4px' }}>
-                  Wema Bank • UnitMate - {activeUnit.name}
+                  {activeUnit.bankName || 'Wema Bank'} • UnitMate - {activeUnit.name}
                 </p>
               </div>
 
@@ -647,7 +707,7 @@ export default function Home() {
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '9px', color: '#8D99AE' }}>Total Contributed</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#34D399' }}>
-                    ₦{(activeUnit.paidMonths.length * (activeUnit.unitDue + activeUnit.zonalDue + activeUnit.techFee)).toLocaleString()}
+                    ₦{(activeUnit.paidMonths.length * activeUnitMonthlyTotal).toLocaleString()}
                   </div>
                 </div>
                 <div style={{ background: '#151D35', padding: '8px', borderRadius: '6px' }}>
