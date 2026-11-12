@@ -198,20 +198,43 @@ export default function Home() {
 
     setUnits(currentUnits);
 
-    // Fetch live Monnify virtual accounts from Supabase
+        // Fetch live Monnify virtual accounts via internal API route
     const syncMonnifyFromSupabase = async () => {
       try {
-        const headers: Record<string, string> = {};
-        if (SUPABASE_ANON_KEY) {
-          headers['apikey'] = SUPABASE_ANON_KEY;
-          headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
-        }
-
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/flats?select=block,flat,monnify_account_number,monnify_bank_name`,
-          { headers }
-        );
+        const res = await fetch('/api/flats', { cache: 'no-store' });
         if (!res.ok) return;
+
+        const dbFlats = await res.json();
+        if (!Array.isArray(dbFlats)) return;
+
+        const merged = { ...currentUnits };
+        let hasUpdates = false;
+
+        dbFlats.forEach((row: any) => {
+          if (!row.monnify_account_number) return;
+          const blockNum = String(row.block).replace(/\D/g, '');
+          const flatNum = String(row.flat).replace(/\D/g, '');
+          const key = `FLAT-${blockNum}-${flatNum}`;
+
+          if (merged[key]) {
+            merged[key] = {
+              ...merged[key],
+              customAccount: row.monnify_account_number,
+              bankName: row.monnify_bank_name || 'Wema Bank'
+            };
+            hasUpdates = true;
+          }
+        });
+
+        if (hasUpdates) {
+          setUnits(merged);
+          localStorage.setItem('unitmate_v8_units', JSON.stringify(merged));
+        }
+      } catch (err) {
+        console.error('Supabase account sync error:', err);
+      }
+    };
+
 
         const dbFlats = await res.json();
         if (!Array.isArray(dbFlats)) return;
