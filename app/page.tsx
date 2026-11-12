@@ -217,13 +217,17 @@ export default function Home() {
           const key = `FLAT-${blockNum}-${flatNum}`;
 
           if (merged[key]) {
-            merged[key] = {
-              ...merged[key],
-              customAccount: row.monnify_account_number,
-              bankName: row.monnify_bank_name || 'Wema Bank'
-            };
-            hasUpdates = true;
-          }
+  merged[key] = {
+    ...merged[key],
+    customAccount: row.monnify_account_number || merged[key].customAccount,
+    bankName: row.monnify_bank_name || 'Wema Bank',
+    paidMonths: Array.isArray(row.paid_months) && row.paid_months.length > 0
+      ? Array.from(new Set([...merged[key].paidMonths, ...row.paid_months]))
+      : merged[key].paidMonths
+  };
+  hasUpdates = true;
+}
+
         });
 
         if (hasUpdates) {
